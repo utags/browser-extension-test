@@ -2,9 +2,16 @@ const failures = []
 
 export function assertEquals(value1, value2) {
   if (value1 !== value2) {
+    console.error(value1, value2)
     failures.push(
       new Error(`Assert failed: ${String(value1)} with ${String(value2)}`)
     )
+  }
+}
+
+export function assertTrue(value) {
+  if (!value) {
+    failures.push(new Error(`Assert failed`))
   }
 }
 
