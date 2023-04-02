@@ -14,6 +14,8 @@
 // @match                http://*/*
 // @grant                GM.getValue
 // @grant                GM.setValue
+// @grant                GM.deleteValue
+// @grant                GM.listValues
 // @grant                GM_addValueChangeListener
 // @grant                GM_removeValueChangeListener
 // @grant                GM_addElement
@@ -29,6 +31,8 @@
   var setValue = async (key, value) => {
     if (value !== void 0) GM.setValue(key, JSON.stringify(value))
   }
+  var deleteValue = async (key) => GM.deleteValue(key)
+  var listValues = async () => GM.listValues()
   var addValueChangeListener = (key, func) => {
     if (typeof GM_addValueChangeListener !== "function") {
       console.warn("Do not support GM_addValueChangeListener!")
@@ -158,6 +162,172 @@
       : addStyle
   var content_default =
     '#myprefix_div{color:#000;box-sizing:border-box;padding:10px 15px;background-color:#fff;border-radius:5px;-webkit-box-shadow:0px 10px 39px 10px rgba(62,66,66,.22);-moz-box-shadow:0px 10px 39px 10px rgba(62,66,66,.22);box-shadow:0px 10px 39px 10px rgba(62,66,66,.22) !important}#myprefix_div div{color:green}#myprefix_test_link{--border-color: linear-gradient(-45deg, #ffae00, #7e03aa, #00fffb);--border-width: 0.125em;--curve-size: 0.5em;--blur: 30px;--bg: #080312;--color: #afffff;color:var(--color);position:relative;isolation:isolate;display:inline-grid;place-content:center;padding:.5em 1.5em;font-size:17px;border:0;text-transform:uppercase;box-shadow:10px 10px 20px rgba(0,0,0,.6);clip-path:polygon(0% var(--curve-size), var(--curve-size) 0, 100% 0, 100% calc(100% - var(--curve-size)), calc(100% - var(--curve-size)) 100%, 0 100%);transition:color 250ms}#myprefix_test_link::after,#myprefix_test_link::before{content:"";position:absolute;inset:0}#myprefix_test_link::before{background:var(--border-color);background-size:300% 300%;animation:move-bg7234 5s ease infinite;z-index:-2}@keyframes move-bg7234{0%{background-position:31% 0%}50%{background-position:70% 100%}100%{background-position:31% 0%}}#myprefix_test_link::after{background:var(--bg);z-index:-1;clip-path:polygon(var(--border-width) calc(var(--curve-size) + var(--border-width) * 0.5), calc(var(--curve-size) + var(--border-width) * 0.5) var(--border-width), calc(100% - var(--border-width)) var(--border-width), calc(100% - var(--border-width)) calc(100% - (var(--curve-size) + var(--border-width) * 0.5)), calc(100% - (var(--curve-size) + var(--border-width) * 0.5)) calc(100% - var(--border-width)), var(--border-width) calc(100% - var(--border-width)));transition:clip-path 500ms}#myprefix_test_link:where(:hover,:focus)::after{clip-path:polygon(calc(100% - var(--border-width)) calc(100% - (var(--curve-size) + var(--border-width) * 0.5)), calc(100% - var(--border-width)) var(--border-width), calc(100% - var(--border-width)) var(--border-width), calc(100% - var(--border-width)) calc(100% - (var(--curve-size) + var(--border-width) * 0.5)), calc(100% - (var(--curve-size) + var(--border-width) * 0.5)) calc(100% - var(--border-width)), calc(100% - (var(--curve-size) + var(--border-width) * 0.5)) calc(100% - var(--border-width)));transition:200ms}#myprefix_test_link:where(:hover,:focus){color:#fff}'
+  var failures = []
+  function assertEquals(value1, value2) {
+    if (value1 !== value2) {
+      const error = new Error(
+        `Assert failed: ${String(value1)} with ${String(value2)}`
+      )
+      console.error(error)
+      failures.push(error)
+    }
+  }
+  function assertTrue(value, message) {
+    if (!value) {
+      const error = new Error(
+        `Assert failed. ${message != null ? message : ""}`
+      )
+      console.error(error)
+      failures.push(error)
+    }
+  }
+  async function runTest(name, func) {
+    console.log("Start test", name)
+    await func()
+    if (failures.length === 0) {
+      console.log("All test passed")
+    } else {
+      for (const failure of failures) {
+        console.error(failure)
+      }
+    }
+  }
+  var sleep = async () => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(1)
+      }, 100)
+    })
+  }
+  async function test() {
+    await runTest("storage", async () => {
+      console.log(`[${"userscript"}] [${"prod"}] runs on`, location.href)
+      const key = "test_" + Date.now()
+      let value2 = null
+      let changeCount = 0
+      const removeValueChangeListener = addValueChangeListener(
+        key,
+        (_key, oldValue, newValue) => {
+          console.log("addValueChangeListener", _key, oldValue, newValue)
+          changeCount++
+          assertEquals(key, _key)
+          assertTrue(
+            oldValue !== newValue,
+            `oldValue: ${oldValue}, newValue: ${newValue}`
+          )
+          if (true) {
+            newValue = JSON.parse(newValue)
+          }
+          value2 = newValue
+        }
+      )
+      let value = await getValue(key)
+      console.log("getValue newKey", value)
+      assertEquals(value, void 0)
+      let keys = await listValues()
+      assertTrue(!keys.includes(key))
+      await setValue(key, void 0)
+      value = await getValue(key)
+      console.log("setValue undefined", "getValue", value)
+      assertEquals(value, void 0)
+      await sleep()
+      keys = await listValues()
+      assertTrue(!keys.includes(key))
+      assertEquals(changeCount, 0)
+      await setValue(key, null)
+      value = await getValue(key)
+      console.log("setValue null", "getValue", value)
+      assertEquals(value, null)
+      keys = await listValues()
+      assertTrue(keys.includes(key))
+      await sleep()
+      assertEquals(changeCount, 1)
+      assertEquals(value, value2)
+      await setValue(key, void 0)
+      value = await getValue(key)
+      console.log("setValue undefined", "getValue", value)
+      await sleep()
+      assertEquals(value, null)
+      assertEquals(value, value2)
+      keys = await listValues()
+      assertTrue(keys.includes(key))
+      assertEquals(changeCount, 1)
+      await setValue(key, 123)
+      value = await getValue(key)
+      console.log("setValue 123", "getValue", value)
+      assertEquals(value, 123)
+      await sleep()
+      keys = await listValues()
+      assertTrue(keys.includes(key))
+      assertEquals(changeCount, 2)
+      assertEquals(value, value2)
+      await setValue(key, void 0)
+      value = await getValue(key)
+      console.log("setValue undefined", "getValue", value)
+      assertEquals(value, 123)
+      await sleep()
+      assertEquals(changeCount, 2)
+      assertEquals(value, value2)
+      await setValue(key, null)
+      value = await getValue(key)
+      console.log("setValue null", "getValue", value)
+      assertEquals(value, null)
+      await sleep()
+      assertEquals(changeCount, 3)
+      await setValue(key, "abc")
+      value = await getValue(key)
+      console.log("setValue abc", "getValue", value)
+      assertEquals(value, "abc")
+      await sleep()
+      assertEquals(changeCount, 4)
+      await setValue(key, void 0)
+      value = await getValue(key)
+      console.log("setValue undefined", "getValue", value)
+      assertEquals(value, "abc")
+      await sleep()
+      assertEquals(changeCount, 4)
+      await setValue(key, null)
+      value = await getValue(key)
+      console.log("setValue null", "getValue", value)
+      assertEquals(value, null)
+      await sleep()
+      assertEquals(changeCount, 5)
+      await setValue(key, [1, 2, 3])
+      value = await getValue(key)
+      console.log("setValue [1, 2, 3]", "getValue", value)
+      assertEquals(JSON.stringify(value), JSON.stringify([1, 2, 3]))
+      await sleep()
+      assertEquals(changeCount, 6)
+      await setValue(key, [1, 2, 3])
+      value = await getValue(key)
+      console.log("setValue [1, 2, 3]", "getValue", value)
+      assertEquals(JSON.stringify(value), JSON.stringify([1, 2, 3]))
+      await sleep()
+      assertEquals(changeCount, 6)
+      await setValue(key, void 0)
+      value = await getValue(key)
+      console.log("setValue undefined", "getValue", value)
+      assertEquals(JSON.stringify(value), JSON.stringify([1, 2, 3]))
+      await sleep()
+      assertEquals(changeCount, 6)
+      removeValueChangeListener()
+      await setValue(key, null)
+      value = await getValue(key)
+      console.log("setValue null", "getValue", value)
+      assertEquals(value, null)
+      await sleep()
+      assertEquals(changeCount, 6)
+      keys = await listValues()
+      assertTrue(keys.includes(key))
+      await deleteValue(key)
+      keys = await listValues()
+      assertTrue(!keys.includes(key))
+    })
+  }
+  var test2 = async () => {
+    await test()
+  }
+  test2()
   function showVisitCount(visitCount) {
     const div =
       $("#myprefix_div") ||

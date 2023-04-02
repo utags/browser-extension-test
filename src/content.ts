@@ -13,6 +13,11 @@ import {
 } from "browser-extension-utils"
 import styleText from "data-text:./content.scss"
 
+import { test } from "./test"
+
+// eslint-disable-next-line @typescript-eslint/no-floating-promises
+test()
+
 function showVisitCount(visitCount: string) {
   const div =
     $("#myprefix_div") ||
