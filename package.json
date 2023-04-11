@@ -1,7 +1,7 @@
 {
-  "name": "my-extension",
-  "displayName": "My-Extension",
-  "displayName:zh-CN": "我的扩展",
+  "name": "browser-extension-test",
+  "displayName": "Browser Extension Test",
+  "displayName:zh-CN": "Browser Extension Test",
   "version": "0.1.0",
   "description": "try to take over the world!",
   "description:zh-CN": "让世界更美好！",

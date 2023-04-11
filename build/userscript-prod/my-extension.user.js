@@ -1,6 +1,6 @@
 // ==UserScript==
-// @name                 My-Extension
-// @name:zh-CN           我的扩展
+// @name                 Browser Extension Test
+// @name:zh-CN           Browser Extension Test
 // @namespace            https://github.com/utags/browser-extension-starter
 // @homepageURL          https://github.com/utags/browser-extension-starter#readme
 // @supportURL           https://github.com/utags/browser-extension-starter/issues
