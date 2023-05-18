@@ -24,19 +24,46 @@
 //
 ;(() => {
   "use strict"
+  var listeners = {}
   var getValue = async (key) => {
     const value = await GM.getValue(key)
     return value && value !== "undefined" ? JSON.parse(value) : void 0
   }
   var setValue = async (key, value) => {
-    if (value !== void 0) GM.setValue(key, JSON.stringify(value))
+    if (value !== void 0) {
+      const newValue = JSON.stringify(value)
+      if (listeners[key]) {
+        const oldValue = await GM.getValue(key)
+        await GM.setValue(key, newValue)
+        if (newValue !== oldValue) {
+          for (const func of listeners[key]) {
+            func(key, oldValue, newValue)
+          }
+        }
+      } else {
+        await GM.setValue(key, newValue)
+      }
+    }
   }
   var deleteValue = async (key) => GM.deleteValue(key)
   var listValues = async () => GM.listValues()
+  var _addValueChangeListener = (key, func) => {
+    listeners[key] = listeners[key] || []
+    listeners[key].push(func)
+    return () => {
+      if (listeners[key] && listeners[key].length > 0) {
+        for (let i = listeners[key].length - 1; i >= 0; i--) {
+          if (listeners[key][i] === func) {
+            listeners[key].splice(i, 1)
+          }
+        }
+      }
+    }
+  }
   var addValueChangeListener = (key, func) => {
     if (typeof GM_addValueChangeListener !== "function") {
       console.warn("Do not support GM_addValueChangeListener!")
-      return () => void 0
+      return _addValueChangeListener(key, func)
     }
     const listenerId = GM_addValueChangeListener(key, func)
     return () => {
@@ -192,6 +219,110 @@
       }
     }
   }
+  function styleIncludes(expected, input) {
+    for (const value of input.split(";").map((value2) => value2.trim()))
+      assertTrue(expected.includes(value))
+  }
+  function styleEquals(expected, input) {
+    styleIncludes(expected, input)
+    styleIncludes(input, expected)
+  }
+  async function test() {
+    await runTest("setStyle", async () => {
+      const div = createElement("div")
+      div.innerHTML = "Hello World!"
+      document.body.append(div)
+      setStyle(
+        div,
+        "width: 100px; height: 100px; background-color:red !important"
+      )
+      console.log(div.style.cssText)
+      assertEquals(
+        div.style.cssText,
+        "width: 100px; height: 100px; background-color: red !important;"
+      )
+      setStyle(div, "width: 100px; height: 100px; color: yellow;")
+      console.log(div.style.cssText)
+      styleEquals(
+        div.style.cssText,
+        "width: 100px; height: 100px; color: yellow; background-color: red !important;"
+      )
+      setStyle(
+        div,
+        "width: 100px; height: 100px; color: yellow !important;",
+        true
+      )
+      console.log(div.style.cssText)
+      assertEquals(
+        div.style.cssText,
+        "width: 100px; height: 100px; color: yellow !important;"
+      )
+      setStyle(
+        div,
+        "width: 100px; height: 100px; background-color:red   !important",
+        true
+      )
+      console.log(div.style.cssText)
+      assertEquals(
+        div.style.cssText,
+        "width: 100px; height: 100px; background-color: red !important;"
+      )
+      setStyle(div, "background-color: blue;")
+      console.log(div.style.cssText)
+      assertEquals(
+        div.style.cssText,
+        "width: 100px; height: 100px; background-color: red !important;"
+      )
+      setStyle(div, "background-color: green !important;")
+      console.log(div.style.cssText)
+      assertEquals(
+        div.style.cssText,
+        "width: 100px; height: 100px; background-color: green !important;"
+      )
+      setStyle(
+        div,
+        "width: 100px; height: 100px; background-color: red !important; background-color: blue;",
+        true
+      )
+      console.log(div.style.cssText)
+      assertEquals(
+        div.style.cssText,
+        "width: 100px; height: 100px; background-color: red !important;"
+      )
+      setStyle(
+        div,
+        "width: 100px; height: 100px; background-color: red !important; background-color: blue !important;",
+        true
+      )
+      console.log(div.style.cssText)
+      assertEquals(
+        div.style.cssText,
+        "width: 100px; height: 100px; background-color: blue !important;"
+      )
+      setStyle(
+        div,
+        "width: 100px; height: 100px; background-color: red; background-color: blue;",
+        true
+      )
+      console.log(div.style.cssText)
+      assertEquals(
+        div.style.cssText,
+        "width: 100px; height: 100px; background-color: blue;"
+      )
+      setStyle(
+        div,
+        `
+  -webkit-box-shadow: 0px 10px 39px 10px rgba(62, 66, 66, 0.22);
+  -moz-box-shadow: 0px 10px 39px 10px rgba(62, 66, 66, 0.22);
+  box-shadow: 0px 10px 39px 10px rgba(62, 66, 66, 0.22);`
+      )
+      console.log(div.style.cssText)
+      styleIncludes(
+        div.style.cssText,
+        "width: 100px; height: 100px; background-color: blue; box-shadow: rgba(62, 66, 66, 0.22) 0px 10px 39px 10px;"
+      )
+    })
+  }
   var sleep = async () => {
     return new Promise((resolve) => {
       setTimeout(() => {
@@ -199,7 +330,7 @@
       }, 100)
     })
   }
-  async function test() {
+  async function test2() {
     await runTest("storage", async () => {
       console.log(`[${"userscript"}] [${"prod"}] runs on`, location.href)
       const key = "test_" + Date.now()
@@ -212,7 +343,7 @@
           changeCount++
           assertEquals(key, _key)
           assertTrue(
-            oldValue !== newValue,
+            JSON.stringify(oldValue) !== JSON.stringify(newValue),
             `oldValue: ${oldValue}, newValue: ${newValue}`
           )
           if (true) {
@@ -324,10 +455,11 @@
       assertTrue(!keys.includes(key))
     })
   }
-  var test2 = async () => {
+  var test3 = async () => {
+    await test2()
     await test()
   }
-  test2()
+  test3()
   function showVisitCount(visitCount) {
     const div =
       $("#myprefix_div") ||
